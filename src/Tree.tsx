@@ -154,6 +154,15 @@ export interface TreeProps<TreeDataType extends BasicDataNode = DataNode> {
       node: EventDataNode<TreeDataType>;
     },
   ) => void;
+  onErrorLoad?: (
+    loadedKeys: Key[],
+    currentKey: Key,
+    retryTimes: number,
+    info: {
+      event: 'load';
+      node: EventDataNode<TreeDataType>;
+    },
+  ) => void;
   loadData?: (treeNode: EventDataNode<TreeDataType>) => Promise<any>;
   loadedKeys?: Key[];
   onMouseEnter?: (info: NodeMouseEventParams<TreeDataType>) => void;
@@ -957,7 +966,7 @@ class Tree<TreeDataType extends DataNode | BasicDataNode = DataNode> extends Rea
     const loadPromise = new Promise<void>((resolve, reject) => {
       // We need to get the latest state of loading/loaded keys
       this.setState(({ loadedKeys = [], loadingKeys = [] }): any => {
-        const { loadData, onLoad } = this.props;
+        const { loadData, onLoad, onLoadError } = this.props;
 
         if (!loadData || loadedKeys.indexOf(key) !== -1 || loadingKeys.indexOf(key) !== -1) {
           return null;
@@ -990,11 +999,16 @@ class Tree<TreeDataType extends DataNode | BasicDataNode = DataNode> extends Rea
             this.setState(prevState => ({
               loadingKeys: arrDel(prevState.loadingKeys, key),
             }));
+            const { loadedKeys: currentLoadedKeys } = this.state;
 
             // If exceed max retry times, we give up retry
             this.loadingRetryTimes[key] = (this.loadingRetryTimes[key] || 0) + 1;
+            onLoadError?.(loadedKeys, key, this.loadingRetryTimes, {
+              event: 'load',
+              node: treeNode,
+            })
             if (this.loadingRetryTimes[key] >= MAX_RETRY_TIMES) {
-              const { loadedKeys: currentLoadedKeys } = this.state;
+
 
               warning(false, 'Retry for `loadData` many times but still failed. No more retry.');
 
@@ -1014,7 +1028,7 @@ class Tree<TreeDataType extends DataNode | BasicDataNode = DataNode> extends Rea
     });
 
     // Not care warning if we ignore this
-    loadPromise.catch(() => {});
+    loadPromise.catch(() => { });
 
     return loadPromise;
   };
